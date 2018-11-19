@@ -13,21 +13,23 @@
 #include <pthread.h>
 #include <string.h>
 #include <math.h>
+#include <sys/wait.h>
 
 
 #define M 11	// tamanho na tabela hash
-#define BYTE 16384
+#define BYTE 	1024
 //#define SERVER_IP "192.168.0.104"
-#define PORTA 5000
+#define PORTA 	5000
 #define BACKLOG 10
 #define TITULO "\n =======\033[43m SERVIDOR DE ARQUIVOS \033[40m=======\n\n"
 
 void Ajuda(int connfd);
+void Criar_DIR_RAIZ(int connfd, char *dir_Caminho);
 void Criar_DIR(int connfd, char *dir_Caminho);
 void Remover_DIR(int connfd, char *dir_Caminho);
 void Entrar_DIR(int connfd, char *dir_Caminho);
 void Sair_DIR(int connfd, char *dir_Caminho);
-void Mostrar_DIR(int connfd, char *dir_Caminho);
+void Mostrar_DIR(int connfd, char *dir_Caminho, int dir_ID);
 void Criar_FILE(int connfd, char *dir_Caminho);
 void Remover_FILE(int connfd, char *dir_Caminho);
 void Escrever_FILE(int connfd, char *dir_Caminho);
@@ -36,6 +38,8 @@ void CMD(int connfd);
 void Invalido(int connfd);
 void retENT(char *recvBuff);
 void* Thread_Conexao(void *Con_socket);
+
+int ChamadaPipe(char* comando);
 
 void Inicializa_hash(void);
 int Funcao_hash(char *arquivo);
@@ -144,7 +148,9 @@ void* Thread_Conexao(void *Con_socket) // função de conexão da thread
 	char recvBuff[BYTE];
 	int tamBuff=0;
 	char dir_Caminho[BYTE];
+	int dir_ID=1;
 	int *id_socket;
+	char comando[BYTE] = "fileExists\n";
 	
 	
 	id_socket = malloc(sizeof(byte)); // aloca memoria para o conteudo do endereço ID do socket.
@@ -152,15 +158,29 @@ void* Thread_Conexao(void *Con_socket) // função de conexão da thread
 	//*id_socket = 0xffffcbd4; // atribuir o endereço ID do socket, pois connfd carrega em seu conteúdo o endereço de memória do socket e não o ID.
 			
 	printf("\nCliente %i conectado! \n",id_socket);
-			
-	stpcpy(dir_Caminho,dir_Raiz); // copia o diretorio raiz para diretorio inical da thread
+	
+	ChamadaPipe(comando);
+	
+	if (atoi(comando)) // se o arquivo não existe
+	{
+		Criar_DIR_RAIZ(connfd,dir_Caminho);
+	}
+	
+	memset(comando, 0, sizeof(comando)); // preenche área de memoria com 0
+	snprintf(comando, sizeof(comando), "raiz\n"); // comando para obter o diretorio raiz
+	
+	ChamadaPipe(comando);
+	
+	retENT(comando);
+	
+	stpcpy(dir_Caminho,comando); // copia o diretorio raiz para diretorio inical da thread
 
-	printf("> Diretório atual> %s\n\n",dir_Caminho);
+	printf("> Diretório atual> %s/\n\n",dir_Caminho);
 	
 	memset(sendBuff, 0, sizeof(sendBuff)); // preenche área de memoria com 0
 	memset(recvBuff, 0, sizeof(recvBuff)); // preenche área de memoria com 0
 
-	snprintf(sendBuff, sizeof(sendBuff), "Conectado!\n> Diretório atual> %s\n",dir_Caminho);
+	snprintf(sendBuff, sizeof(sendBuff), "Conectado!\n> Diretório atual> %s/\n",dir_Caminho);
 	send(connfd,sendBuff,strlen(sendBuff), 0);
 
 		do
@@ -177,6 +197,12 @@ void* Thread_Conexao(void *Con_socket) // função de conexão da thread
 				snprintf(recvBuff, sizeof(recvBuff), "sair");
 				tamBuff = strlen(recvBuff);
 
+			}else
+				
+			if (strcmp(recvBuff,"cdirR") == 0)  // criar diretorio Raiz
+			{
+				printf("> (%i) %s\n",id_socket,recvBuff);
+				Criar_DIR_RAIZ(connfd,dir_Caminho);
 			}else
 			
 			if (strcmp(recvBuff,"cdir") == 0)  // criar diretorio
@@ -206,7 +232,7 @@ void* Thread_Conexao(void *Con_socket) // função de conexão da thread
 			if (strcmp(recvBuff,"mdir") == 0) // mostrat diretorio
 			{
 				printf("> (%i) %s\n",id_socket,recvBuff);
-				Mostrar_DIR(connfd,dir_Caminho);
+				Mostrar_DIR(connfd,dir_Caminho,dir_ID);
 			}else
 			
 			if (strcmp(recvBuff,"cfile") == 0) // criar arquivo
@@ -275,6 +301,58 @@ void* Thread_Conexao(void *Con_socket) // função de conexão da thread
 
 
 
+int ChamadaPipe(char* comando)
+{
+	char buffer[BYTE];
+	int escrita[2];                      // an array that will hold two file descriptors
+	int leitura[2]; 
+	pipe(escrita);                       // populates fds with two file descriptors
+	pipe(leitura);
+	pid_t pid = fork();              // create child process that is a clone of the parent
+
+	if (pid == 0) {                  // if pid == 0, then this is the child process
+		close(STDIN_FILENO);
+		dup(escrita[0]);
+
+		close(STDOUT_FILENO);
+		dup(leitura[1]);
+		//dup2(escrita[0], STDIN_FILENO);    // fds[0] (the read end of pipe) donates its data to file descriptor 0
+		close(escrita[0]);                 // file descriptor no longer needed in child since stdin is a copy
+		close(escrita[1]);                 // file descriptor unused in child
+		close(leitura[0]);                 // file descriptor no longer needed in child since stdin is a copy
+		close(leitura[1]);                 // file descriptor unused in child
+
+		char *argv[] = {(char *)"./file_manager.exe", NULL};  // create argument vector
+		execvp(argv[0], argv);         // run sort command
+	} else {                         // in parent process
+		close(escrita[0]);                 // file descriptor unused in parent
+		close(leitura[1]);
+
+		// write input to the writable file descriptor so it can be read in from child:
+
+		  //dprintf(escrita[1], "%s", words); 
+		write(escrita[1],comando,strlen(comando));
+
+		// send EOF so child can continue (child blocks until all input has been processed):
+		close(escrita[1]); 
+	}
+
+
+	memset(&buffer,0x00,sizeof(buffer));
+	read(leitura[0],buffer,sizeof(buffer));
+
+	//printf("> %s",buffer);
+	
+	strcpy(comando,buffer);
+
+	int status;
+	pid_t wpid = waitpid(pid, &status, 0); // wait for child to finish before exiting
+	return wpid == pid && WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+
+}
+
+
+
 
 void Ajuda(int connfd)
 {
@@ -282,7 +360,7 @@ void Ajuda(int connfd)
 	char recvBuff[BYTE];
 	int tamBuff=0;
 	
-	snprintf(sendBuff, sizeof(sendBuff), "\n\t╔══\033[43m AJUDA \033[40m════════════════X═╗\n\t║ cdir    -  cria diretório ║\n\t║ rdir    -remove diretório ║\n\t║ edir    - entra diretório ║\n\t║ sdir    -  sair diretório ║\n\t║ mdir    -mostra diretório ║\n\t║ cfile   -    cria arquivo ║\n\t║ rfile   -  remove arquivo ║\n\t║ efile   - escreve arquivo ║\n\t║ mfile   -  mostra arquivo ║\n\t║ cmd     -  comando prompt ║\n\t║ sair    -        encerrar ║\n\t╚═══════════════════════════╝\n");
+	snprintf(sendBuff, sizeof(sendBuff), "\n\t╔══\033[43m AJUDA \033[40m════════════════X═╗\n\t║ cdirR   -cria diret. RAIZ ║\n\t║ cdir    -  cria diretório ║\n\t║ rdir    -remove diretório ║\n\t║ edir    - entra diretório ║\n\t║ sdir    -  sair diretório ║\n\t║ mdir    -mostra diretório ║\n\t║ cfile   -    cria arquivo ║\n\t║ rfile   -  remove arquivo ║\n\t║ efile   - escreve arquivo ║\n\t║ mfile   -  mostra arquivo ║\n\t║ cmd     -  comando prompt ║\n\t║ sair    -        encerrar ║\n\t╚═══════════════════════════╝\n");
 	send(connfd,sendBuff,strlen(sendBuff), 0);
 
 
@@ -294,40 +372,62 @@ void Ajuda(int connfd)
 
 
 
+void Criar_DIR_RAIZ(int connfd, char *dir_Caminho)
+{
+	char sendBuff[BYTE];
+	char recvBuff[BYTE];
+	char comando[BYTE] = "cdirR\n";
+	int tamBuff=0;
+	
+	
+	snprintf(sendBuff, sizeof(sendBuff), "\033[44mCriar diretório RAIZ, digite o nome:\033[40m\n");
+	send(connfd,sendBuff,strlen(sendBuff), 0);
+	
+	tamBuff = recv(connfd,recvBuff,BYTE, 0);
+	recvBuff[tamBuff] = 0x00;
+	retENT(recvBuff);
+	
+	strcat(comando,recvBuff);
+	strcat(comando,"\n");
+	
+	memset(sendBuff,0, sizeof(sendBuff));
+	
+	ChamadaPipe(comando);
+	
+	snprintf(sendBuff, sizeof(sendBuff), comando);
+	send(connfd,sendBuff,strlen(sendBuff), 0);
+		
+	printf("> %s",comando);
+
+}
+
+
 
 void Criar_DIR(int connfd, char *dir_Caminho)
 {
 	char sendBuff[BYTE];
 	char recvBuff[BYTE];
+	char comando[BYTE] = "cdir\n";
 	int tamBuff=0;
+	
+	
+	snprintf(sendBuff, sizeof(sendBuff), "\033[44mCriar diretório, digite o nome:\033[40m\n");
+	send(connfd,sendBuff,strlen(sendBuff), 0);
+	
+	tamBuff = recv(connfd,recvBuff,BYTE, 0);
+	recvBuff[tamBuff] = 0x00;
+	retENT(recvBuff);
+	
+	strcat(comando,recvBuff);
+	strcat(comando,"\n");
+	
+	ChamadaPipe(comando);
+	
+	snprintf(sendBuff, sizeof(sendBuff), comando);
+	send(connfd,sendBuff,strlen(sendBuff), 0);
+		
+	printf("> %s",comando);
 
-	if (chdir(dir_Caminho) == 0)	// chdir - altera o diretório de trabalho
-	{
-		snprintf(sendBuff, sizeof(sendBuff), "\033[44mCriar diretório, digite o nome:\033[40m\n");
-		send(connfd,sendBuff,strlen(sendBuff), 0);
-		
-		tamBuff = recv(connfd,recvBuff,BYTE, 0);
-		recvBuff[tamBuff] = 0x00;
-		retENT(recvBuff);
-		
-		char comando[BYTE]  = "mkdir ";
-		strcat(comando,recvBuff);
-			
-		if (system(comando) == 0)
-		{
-			snprintf(sendBuff, sizeof(sendBuff), "\033[42mDiretório criado com sucesso.\033[40m\n");
-			send(connfd,sendBuff,strlen(sendBuff), 0);
-		}else
-			{			
-			snprintf(sendBuff, sizeof(sendBuff), "\033[41mErro ao criar diretório.\033[40m\n");
-			send(connfd,sendBuff,strlen(sendBuff), 0);
-			}
-	}else
-		{			
-		stpcpy(dir_Caminho,dir_Raiz);
-		snprintf(sendBuff, sizeof(sendBuff), "\033[41mErro ao acessar diretório atual. Redirecionado a Raiz.\033[40m\n");
-		send(connfd,sendBuff,strlen(sendBuff), 0);
-		}
 }
 
 
@@ -449,36 +549,29 @@ void Sair_DIR(int connfd, char *dir_Caminho)
 
 
 
-void Mostrar_DIR(int connfd, char *dir_Caminho)
+void Mostrar_DIR(int connfd, char *dir_Caminho, int dir_ID)
 {
 	char sendBuff[BYTE];
 	char recvBuff[BYTE];
-	DIR *dir_Atual = NULL; // O tipo de dados DIR representa um fluxo de diretório.
-	struct dirent *dir = NULL; // Esse é um tipo de estrutura usado para retornar informações sobre entradas de diretório.
-
+	char comando[BYTE];
 	
-	if (chdir(dir_Caminho) == 0)	// chdir - altera o diretório de trabalho
-	{	
-		dir_Atual = opendir(dir_Caminho); 
-		memset(sendBuff, 0, sizeof(sendBuff)); // preenche área de memoria com 0
+	memset(comando, 0, sizeof(comando));
+	snprintf(comando, sizeof(comando), "mdir\n%i\n",dir_ID);
+	
+	ChamadaPipe(comando);
+	
+	//printf("> %s",comando);
+
+	memset(sendBuff, 0, sizeof(sendBuff)); // preenche área de memoria com 0
 		
-		strcat(sendBuff,"\033[42mDiretório>\033[40m ");
-		strcat(sendBuff,dir_Caminho);
-		strcat(sendBuff,"\n\n\t");
-		while(dir = readdir(dir_Atual)){ // ler diretório
-			strcat(sendBuff, dir->d_name); //Esse é o componente de nome de arquivo terminado com nulo.
-			strcat(sendBuff, "\t\n\t");
-		}
-		strcat(sendBuff, "\n");
-		rewinddir(dir_Atual);	// rewinddir - redefine a posição de um fluxo de diretório para o início de um diretório
-		send(connfd,sendBuff,strlen(sendBuff),0);
-	}else
-		{			
-		stpcpy(dir_Caminho,dir_Raiz);
-		snprintf(sendBuff, sizeof(sendBuff), "\033[41mErro ao acessar diretório atual. Redirecionado a Raiz.\033[40m\n");
-		send(connfd,sendBuff,strlen(sendBuff), 0);
-		}
-} 
+	strcat(sendBuff,"\033[42mDiretório>\033[40m ");
+	strcat(sendBuff,dir_Caminho);
+	strcat(sendBuff,"/\n\n");
+
+	strcat(sendBuff,comando);
+
+	send(connfd,sendBuff,strlen(sendBuff),0);
+}
 
 
 
@@ -486,36 +579,38 @@ void Criar_FILE(int connfd, char *dir_Caminho)
 {
 	char sendBuff[BYTE];
 	char recvBuff[BYTE];
+	char comando[BYTE]  = "cfile\n";
 	int tamBuff=0;
 
+	snprintf(sendBuff, sizeof(sendBuff), "\033[44mCriar arquivo, digite o nome:\033[40m\n");
+	send(connfd,sendBuff,strlen(sendBuff), 0);
 	
-	if (chdir(dir_Caminho) == 0)	// chdir - altera o diretório de trabalho
-	{
-		snprintf(sendBuff, sizeof(sendBuff), "\033[44mCriar arquivo, digite o nome:\033[40m\n");
-		send(connfd,sendBuff,strlen(sendBuff), 0);
+	tamBuff = recv(connfd,recvBuff,BYTE, 0);
+	recvBuff[tamBuff] = 0x00;
+	retENT(recvBuff);
+	
+	strcat(comando,recvBuff);
+	
+	memset(recvBuff,0, sizeof(recvBuff));
+	
+	snprintf(sendBuff, sizeof(sendBuff), "\033[44mDigite o conteúdo:\033[40m\n");
+	send(connfd,sendBuff,strlen(sendBuff), 0);
+	
+	tamBuff = recv(connfd,recvBuff,BYTE, 0);
+	recvBuff[tamBuff] = 0x00;
+	retENT(recvBuff);
+	
+	strcat(comando,"\n");
+	strcat(comando,recvBuff);
+	strcat(comando,"\n");
+	
+	ChamadaPipe(comando);
+	
+	snprintf(sendBuff, sizeof(sendBuff), comando);
+	send(connfd,sendBuff,strlen(sendBuff), 0);
 		
-		tamBuff = recv(connfd,recvBuff,BYTE, 0);
-		recvBuff[tamBuff] = 0x00;
-		retENT(recvBuff);
-		
-		char comando[BYTE]  = "touch ";
-		strcat(comando,recvBuff);
-			
-		if (system(comando) == 0)
-		{
-			snprintf(sendBuff, sizeof(sendBuff), "\033[42mArquivo criado com sucesso.\033[40m\n");
-			send(connfd,sendBuff,strlen(sendBuff), 0);
-		}else
-			{			
-			snprintf(sendBuff, sizeof(sendBuff), "\033[41mErro ao criar arquivo.\033[40m\n");
-			send(connfd,sendBuff,strlen(sendBuff), 0);
-			}
-	}else
-		{			
-		stpcpy(dir_Caminho,dir_Raiz);
-		snprintf(sendBuff, sizeof(sendBuff), "\033[41mErro ao acessar diretório atual. Redirecionado a Raiz.\033[40m\n");
-		send(connfd,sendBuff,strlen(sendBuff), 0);
-		}
+	printf("> %s",comando);
+	
 }
 
 
