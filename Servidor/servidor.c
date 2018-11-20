@@ -25,15 +25,15 @@
 
 void Ajuda(int connfd);
 void Criar_DIR_RAIZ(int connfd, char *dir_Caminho);
-void Criar_DIR(int connfd, char *dir_Caminho);
-void Remover_DIR(int connfd, char *dir_Caminho);
-void Entrar_DIR(int connfd, char *dir_Caminho);
-void Sair_DIR(int connfd, char *dir_Caminho);
+void Criar_DIR(int connfd, char *dir_Caminho, int dir_ID);
+void Remover_DIR(int connfd, char *dir_Caminho, int dir_ID);
+void Entrar_DIR(int connfd, char *dir_Caminho, int *dir_ID);
+void Sair_DIR(int connfd, char *dir_Caminho, int *dir_ID);
 void Mostrar_DIR(int connfd, char *dir_Caminho, int dir_ID);
-void Criar_FILE(int connfd, char *dir_Caminho);
-void Remover_FILE(int connfd, char *dir_Caminho);
-void Escrever_FILE(int connfd, char *dir_Caminho);
-void Mostrar_FILE(int connfd, char *dir_Caminho);
+void Criar_FILE(int connfd, char *dir_Caminho, int dir_ID);
+void Remover_FILE(int connfd, char *dir_Caminho, int dir_ID);
+void Escrever_FILE(int connfd, char *dir_Caminho, int dir_ID);
+void Mostrar_FILE(int connfd, char *dir_Caminho, int dir_ID);
 void CMD(int connfd);
 void Invalido(int connfd);
 void retENT(char *recvBuff);
@@ -159,30 +159,33 @@ void* Thread_Conexao(void *Con_socket) // função de conexão da thread
 			
 	printf("\nCliente %i conectado! \n",id_socket);
 	
-	ChamadaPipe(comando);
+	ChamadaPipe(comando); // verifica se arquivo existe
 	
 	if (atoi(comando)) // se o arquivo não existe
 	{
 		Criar_DIR_RAIZ(connfd,dir_Caminho);
+		printf("> Diretório atual> %s/\n\n",dir_Caminho);
+		
+	}else{
+	
+		memset(comando, 0, sizeof(comando)); // preenche área de memoria com 0
+		snprintf(comando, sizeof(comando), "raiz\n"); // comando para obter o diretorio raiz
+		
+		ChamadaPipe(comando);
+		
+		retENT(comando);
+		
+		stpcpy(dir_Caminho,comando); // copia o diretorio raiz para diretorio inicial da thread
+
+		printf("> Diretório atual> %s/\n\n",dir_Caminho);
+		
+		memset(sendBuff, 0, sizeof(sendBuff)); // preenche área de memoria com 0
+		memset(recvBuff, 0, sizeof(recvBuff)); // preenche área de memoria com 0
+
+		snprintf(sendBuff, sizeof(sendBuff), "Conectado!\n> Diretório atual> %s/\n",dir_Caminho);
+		send(connfd,sendBuff,strlen(sendBuff), 0);
 	}
 	
-	memset(comando, 0, sizeof(comando)); // preenche área de memoria com 0
-	snprintf(comando, sizeof(comando), "raiz\n"); // comando para obter o diretorio raiz
-	
-	ChamadaPipe(comando);
-	
-	retENT(comando);
-	
-	stpcpy(dir_Caminho,comando); // copia o diretorio raiz para diretorio inical da thread
-
-	printf("> Diretório atual> %s/\n\n",dir_Caminho);
-	
-	memset(sendBuff, 0, sizeof(sendBuff)); // preenche área de memoria com 0
-	memset(recvBuff, 0, sizeof(recvBuff)); // preenche área de memoria com 0
-
-	snprintf(sendBuff, sizeof(sendBuff), "Conectado!\n> Diretório atual> %s/\n",dir_Caminho);
-	send(connfd,sendBuff,strlen(sendBuff), 0);
-
 		do
 		{
 			
@@ -208,28 +211,28 @@ void* Thread_Conexao(void *Con_socket) // função de conexão da thread
 			if (strcmp(recvBuff,"cdir") == 0)  // criar diretorio
 			{
 				printf("> (%i) %s\n",id_socket,recvBuff);
-				Criar_DIR(connfd,dir_Caminho);
+				Criar_DIR(connfd,dir_Caminho,dir_ID);
 			}else
 			
 			if (strcmp(recvBuff,"rdir") == 0) // excluir diretorio
 			{
 				printf("> (%i) %s\n",id_socket,recvBuff);
-				Remover_DIR(connfd,dir_Caminho);
+				Remover_DIR(connfd,dir_Caminho,dir_ID);
 			}else
 			
 			if (strcmp(recvBuff,"edir") == 0) // acessar diretorio
 			{
 				printf("> (%i) %s\n",id_socket,recvBuff);
-				Entrar_DIR(connfd,dir_Caminho);
+				Entrar_DIR(connfd,dir_Caminho,&dir_ID);
 			}else
 				
 			if (strcmp(recvBuff,"sdir") == 0) // voltar um diretorio
 			{
 				printf("> (%i) %s\n",id_socket,recvBuff);
-				Sair_DIR(connfd,dir_Caminho);
+				Sair_DIR(connfd,dir_Caminho,&dir_ID);
 			}else
 
-			if (strcmp(recvBuff,"mdir") == 0) // mostrat diretorio
+			if (strcmp(recvBuff,"mdir") == 0) // mostrar diretorio
 			{
 				printf("> (%i) %s\n",id_socket,recvBuff);
 				Mostrar_DIR(connfd,dir_Caminho,dir_ID);
@@ -238,25 +241,25 @@ void* Thread_Conexao(void *Con_socket) // função de conexão da thread
 			if (strcmp(recvBuff,"cfile") == 0) // criar arquivo
 			{
 				printf("> (%i) %s\n",id_socket,recvBuff);
-				Criar_FILE(connfd,dir_Caminho);
+				Criar_FILE(connfd,dir_Caminho,dir_ID);
 			}else
 			
 			if (strcmp(recvBuff,"rfile") == 0) // excluir arquivo
 			{
 				printf("> (%i) %s\n",id_socket,recvBuff);
-				Remover_FILE(connfd,dir_Caminho);
+				Remover_FILE(connfd,dir_Caminho,dir_ID);
 			}else
 			
 			if (strcmp(recvBuff,"efile") == 0) // escrever no arquivo
 			{
 				printf("> (%i) %s\n",id_socket,recvBuff);
-				Escrever_FILE(connfd,dir_Caminho);
+				Escrever_FILE(connfd,dir_Caminho,dir_ID);
 			}else
 
 			if (strcmp(recvBuff,"mfile") == 0) // mostrar arquivo
 			{
 				printf("> (%i) %s\n",id_socket,recvBuff);
-				Mostrar_FILE(connfd,dir_Caminho);
+				Mostrar_FILE(connfd,dir_Caminho,dir_ID);
 			}else
 			
 			if (strcmp(recvBuff,"cmd") == 0) // digitar um comando
@@ -376,9 +379,11 @@ void Criar_DIR_RAIZ(int connfd, char *dir_Caminho)
 {
 	char sendBuff[BYTE];
 	char recvBuff[BYTE];
-	char comando[BYTE] = "cdirR\n";
+	char comando[BYTE];
 	int tamBuff=0;
 	
+	memset(comando, 0, sizeof(comando));
+	snprintf(comando, sizeof(comando), "cdirR\n");
 	
 	snprintf(sendBuff, sizeof(sendBuff), "\033[44mCriar diretório RAIZ, digite o nome:\033[40m\n");
 	send(connfd,sendBuff,strlen(sendBuff), 0);
@@ -390,11 +395,17 @@ void Criar_DIR_RAIZ(int connfd, char *dir_Caminho)
 	strcat(comando,recvBuff);
 	strcat(comando,"\n");
 	
+	memset(dir_Caminho,0, sizeof(dir_Caminho));
+	
+	stpcpy(dir_Caminho,recvBuff);
+	
 	memset(sendBuff,0, sizeof(sendBuff));
 	
 	ChamadaPipe(comando);
 	
-	snprintf(sendBuff, sizeof(sendBuff), comando);
+	
+	
+	snprintf(sendBuff, sizeof(sendBuff), "%s > Diretório atual> %s/\n",comando,dir_Caminho);
 	send(connfd,sendBuff,strlen(sendBuff), 0);
 		
 	printf("> %s",comando);
@@ -403,13 +414,15 @@ void Criar_DIR_RAIZ(int connfd, char *dir_Caminho)
 
 
 
-void Criar_DIR(int connfd, char *dir_Caminho)
+void Criar_DIR(int connfd, char *dir_Caminho, int dir_ID)
 {
 	char sendBuff[BYTE];
 	char recvBuff[BYTE];
-	char comando[BYTE] = "cdir\n";
+	char comando[BYTE];
 	int tamBuff=0;
 	
+	memset(comando, 0, sizeof(comando));
+	snprintf(comando, sizeof(comando), "cdir\n%i\n",dir_ID);
 	
 	snprintf(sendBuff, sizeof(sendBuff), "\033[44mCriar diretório, digite o nome:\033[40m\n");
 	send(connfd,sendBuff,strlen(sendBuff), 0);
@@ -432,119 +445,134 @@ void Criar_DIR(int connfd, char *dir_Caminho)
 
 
 
-void Remover_DIR(int connfd, char *dir_Caminho)
+void Remover_DIR(int connfd, char *dir_Caminho, int dir_ID)
 {
 	char sendBuff[BYTE];
 	char recvBuff[BYTE];
+	char comando[BYTE];
 	int tamBuff=0;
 
-	if (chdir(dir_Caminho) == 0)	// chdir - altera o diretório de trabalho
-	{	
-		snprintf(sendBuff, sizeof(sendBuff), "\033[44mRemover diretório, digite o nome:\033[40m\n");
-		send(connfd,sendBuff,strlen(sendBuff), 0);
-		
-		tamBuff = recv(connfd,recvBuff,BYTE, 0);
-		recvBuff[tamBuff] = 0x00;
-		retENT(recvBuff);
-		
-		char comando[BYTE]  = "rmdir ";
-		strcat(comando,recvBuff);
-			
-		if (system(comando) == 0)
-		{
-			snprintf(sendBuff, sizeof(sendBuff), "\033[42mDiretório removido com sucesso.\033[40m\n");
-			send(connfd,sendBuff,strlen(sendBuff), 0);
-		}else
-			{			
-			snprintf(sendBuff, sizeof(sendBuff), "\033[41mErro ao remover diretório.\033[40m\n");
-			send(connfd,sendBuff,strlen(sendBuff), 0);
-			}
-	}else
-		{			
-		stpcpy(dir_Caminho,dir_Raiz);
-		snprintf(sendBuff, sizeof(sendBuff), "\033[41mErro ao acessar diretório atual. Redirecionado a Raiz.\033[40m\n");
-		send(connfd,sendBuff,strlen(sendBuff), 0);
-		}			
+	memset(comando, 0, sizeof(comando));
+	snprintf(comando, sizeof(comando), "rdir\n%i\n",dir_ID);
+
+	snprintf(sendBuff, sizeof(sendBuff), "\033[44mRemover diretório, digite o nome:\033[40m\n");
+	send(connfd,sendBuff,strlen(sendBuff), 0);
+	
+	tamBuff = recv(connfd,recvBuff,BYTE, 0);
+	recvBuff[tamBuff] = 0x00;
+	retENT(recvBuff);
+	
+	strcat(comando,recvBuff);
+	strcat(comando,"\n");
+
+	ChamadaPipe(comando);
+
+
+	snprintf(sendBuff, sizeof(sendBuff), comando);
+	send(connfd,sendBuff,strlen(sendBuff), 0);
+	
+	printf("> %s",comando);
+
 }  
 
 
 
-void Entrar_DIR(int connfd, char *dir_Caminho)
+void Entrar_DIR(int connfd, char *dir_Caminho, int *dir_ID)
 {
 	char sendBuff[BYTE];
 	char recvBuff[BYTE];
-	char pasta[BYTE];
+	char comando[BYTE];
 	int tamBuff=0;
-
-	if (chdir(dir_Caminho) == 0)	// chdir - altera o diretório de trabalho
+	
+	
+	memset(comando, 0, sizeof(comando));
+	snprintf(comando, sizeof(comando), "edir\n%i\n",*dir_ID);
+	
+	snprintf(sendBuff, sizeof(sendBuff), "\033[44mEntrar em diretório, digite o nome:\033[40m\n");
+	send(connfd,sendBuff,strlen(sendBuff), 0);
+	
+	tamBuff = recv(connfd,recvBuff,BYTE, 0);
+	recvBuff[tamBuff] = 0x00;
+	retENT(recvBuff);
+	
+	strcat(comando,recvBuff);
+	strcat(comando,"\n");
+	
+	ChamadaPipe(comando);
+	
+		
+	if (strcmp(comando,"\033[41mERRO\033[40m\n") == 0)	
 	{	
-		snprintf(sendBuff, sizeof(sendBuff), "\033[44mEntrar em diretório, digite o nome:\033[40m\n");
+		snprintf(sendBuff, sizeof(sendBuff), comando);
 		send(connfd,sendBuff,strlen(sendBuff), 0);
 		
-		tamBuff = recv(connfd,recvBuff,BYTE, 0);
-		recvBuff[tamBuff] = 0x00;
-		retENT(recvBuff);
+		printf("> %s",comando);
 		
-		memset(pasta, 0, sizeof(pasta)); // preenche área de memoria com 0
+	}else{
+		*dir_ID = atoi(comando);
+		strcat(dir_Caminho,"/");
+		strcat(dir_Caminho,recvBuff);
 		
-		strcpy(pasta,dir_Caminho);
-		strcat(pasta,"/");
-		strcat(pasta,recvBuff);
-		
-		if (chdir(pasta) == 0)	// chdir - altera o diretório de trabalho
-		{
-			getcwd(dir_Caminho, BYTE); // getcwd - obtém o nome do caminho do diretório de trabalho atual
-			printf("Entrou no diretório> %s \n",dir_Caminho);
-			
-			snprintf(sendBuff, sizeof(sendBuff), "\033[42mDiretório atual>\033[40m %s\n",dir_Caminho);
-			send(connfd,sendBuff,strlen(sendBuff), 0);
-		}else
-			{			
-			snprintf(sendBuff, sizeof(sendBuff), "\033[41mErro ao entrar em diretório.\033[40m\n");
-			send(connfd,sendBuff,strlen(sendBuff), 0);
-			}
-	}else
-		{			
-		stpcpy(dir_Caminho,dir_Raiz);
-		snprintf(sendBuff, sizeof(sendBuff), "\033[41mErro ao acessar diretório atual. Redirecionado a Raiz.\033[40m\n");
+		snprintf(sendBuff, sizeof(sendBuff), "\033[42mOK\033[40m\n\n> Diretório atual>\033[40m %s/\n",dir_Caminho);
 		send(connfd,sendBuff,strlen(sendBuff), 0);
-		}
+		
+		printf("\033[42mOK\033[40m\n");
+	}
+
 } 
 
 
 
-void Sair_DIR(int connfd, char *dir_Caminho)
+void Sair_DIR(int connfd, char *dir_Caminho, int *dir_ID)
 {
+	
 	char sendBuff[BYTE];
 	char recvBuff[BYTE];
-	char pasta[BYTE];
+	char comando[BYTE];
 	int tamBuff=0;
-
-	if (chdir(dir_Caminho) == 0)	// chdir - altera o diretório de trabalho
+	
+	
+	memset(comando, 0, sizeof(comando));
+	snprintf(comando, sizeof(comando), "sdir\n%i\n",*dir_ID);
+	
+	ChamadaPipe(comando);
+	
+	if (strcmp(comando,"\033[41mERRO\033[40m\n") == 0)	
 	{	
-		memset(pasta, 0, sizeof(pasta)); // preenche área de memoria com 0
+		char raiz[BYTE];
 		
-		strcpy(pasta,dir_Caminho);
-		strcat(pasta,"/..");
+		memset(raiz, 0, sizeof(raiz)); // preenche área de memoria com 0
+		snprintf(raiz, sizeof(raiz), "raiz\n"); // comando para obter o diretorio raiz
+		ChamadaPipe(raiz);
+		retENT(raiz);
+	
+		stpcpy(dir_Caminho,raiz); // copia o diretorio raiz para diretorio inicial da thread
 		
-		if (chdir(pasta) == 0)	// chdir - altera o diretório de trabalho
-		{
-			getcwd(dir_Caminho, BYTE); // getcwd - obtém o nome do caminho do diretório de trabalho atual
-			printf("Retornou no diretório> %s \n",dir_Caminho);
-			
-			snprintf(sendBuff, sizeof(sendBuff), "\033[42mDiretório atual>\033[40m %s\n",dir_Caminho);
-			send(connfd,sendBuff,strlen(sendBuff), 0);
-		}else
-			{			
-			snprintf(sendBuff, sizeof(sendBuff), "\033[41mErro ao retornar em diretório.\033[40m\n");
-			send(connfd,sendBuff,strlen(sendBuff), 0);
-			}
-	}else
-		{			
-		stpcpy(dir_Caminho,dir_Raiz);
-		snprintf(sendBuff, sizeof(sendBuff), "\033[41mErro ao acessar diretório atual. Redirecionado a Raiz.\033[40m\n");
+		*dir_ID = 1;
+
+		snprintf(sendBuff, sizeof(sendBuff), "%s\n\033[41mErro ao acessar diretório. Redirecionado a Raiz> \033[40m %s/\n",comando,dir_Caminho);
+		send(connfd,sendBuff,strlen(sendBuff), 0);		
+		
+		printf("> %s",comando);
+		
+	}else{
+		
+		char *ret;
+		char new[BYTE];
+		
+		memset(new, 0, sizeof(new));
+		ret = strrchr(dir_Caminho,'/');
+		strncpy(new, dir_Caminho, strlen(dir_Caminho)-strlen(ret));
+		memset(dir_Caminho,0,sizeof(dir_Caminho));
+		stpcpy(dir_Caminho,new);
+		
+		*dir_ID = atoi(comando);
+		
+		snprintf(sendBuff, sizeof(sendBuff), "\033[42mOK\033[40m\n\n> Diretório atual>\033[40m %s/\n",dir_Caminho);
 		send(connfd,sendBuff,strlen(sendBuff), 0);
-		}
+		
+		printf("\033[42mOK\033[40m\n");
+	}			
 }
 
 
@@ -575,12 +603,15 @@ void Mostrar_DIR(int connfd, char *dir_Caminho, int dir_ID)
 
 
 
-void Criar_FILE(int connfd, char *dir_Caminho)
+void Criar_FILE(int connfd, char *dir_Caminho, int dir_ID)
 {
 	char sendBuff[BYTE];
 	char recvBuff[BYTE];
-	char comando[BYTE]  = "cfile\n";
+	char comando[BYTE];
 	int tamBuff=0;
+	
+	memset(comando, 0, sizeof(comando));
+	snprintf(comando, sizeof(comando), "cfile\n%i\n",dir_ID);
 
 	snprintf(sendBuff, sizeof(sendBuff), "\033[44mCriar arquivo, digite o nome:\033[40m\n");
 	send(connfd,sendBuff,strlen(sendBuff), 0);
@@ -590,6 +621,7 @@ void Criar_FILE(int connfd, char *dir_Caminho)
 	retENT(recvBuff);
 	
 	strcat(comando,recvBuff);
+	strcat(comando,"\n");
 	
 	memset(recvBuff,0, sizeof(recvBuff));
 	
@@ -600,7 +632,6 @@ void Criar_FILE(int connfd, char *dir_Caminho)
 	recvBuff[tamBuff] = 0x00;
 	retENT(recvBuff);
 	
-	strcat(comando,"\n");
 	strcat(comando,recvBuff);
 	strcat(comando,"\n");
 	
@@ -611,236 +642,209 @@ void Criar_FILE(int connfd, char *dir_Caminho)
 		
 	printf("> %s",comando);
 	
+	
 }
 
 
 
-void Remover_FILE(int connfd, char *dir_Caminho)
+void Remover_FILE(int connfd, char *dir_Caminho, int dir_ID)
 {
 	char sendBuff[BYTE];
 	char recvBuff[BYTE];
 	char arquivo[BYTE];
+	char comando[BYTE];
 	int tamBuff=0;
 
+	snprintf(sendBuff, sizeof(sendBuff), "\033[44mRemover arquivo, digite o nome:\033[40m\n");
+	send(connfd,sendBuff,strlen(sendBuff), 0);
 	
-	if (chdir(dir_Caminho) == 0)	// chdir - altera o diretório de trabalho
+	tamBuff = recv(connfd,recvBuff,BYTE, 0);
+	recvBuff[tamBuff] = 0x00;
+	retENT(recvBuff);
+
+	memset(arquivo, 0, sizeof(arquivo)); // preenche área de memoria com 0
+	strcpy(arquivo,dir_Caminho);
+	strcat(arquivo,"/");
+	strcat(arquivo,recvBuff);
+
+	pthread_mutex_lock(&mutex);
+		int Em_uso = Buscar_hash(arquivo); // Retorna -1=Não Achou; 0=Mostrar; 1=Escrever; 2=Remover;
+		//Mostra_hash();
+	pthread_mutex_unlock(&mutex);
+
+	
+	if (Em_uso >= 0)  // se o arquivo está em uso
 	{
-		snprintf(sendBuff, sizeof(sendBuff), "\033[44mRemover arquivo, digite o nome:\033[40m\n");
+		snprintf(sendBuff, sizeof(sendBuff), "\033[41mArquivo sendo manipulado por outro Cliente.\033[40m\n");
 		send(connfd,sendBuff,strlen(sendBuff), 0);
-		
-		tamBuff = recv(connfd,recvBuff,BYTE, 0);
-		recvBuff[tamBuff] = 0x00;
-		retENT(recvBuff);
-		
-		memset(arquivo, 0, sizeof(arquivo)); // preenche área de memoria com 0
-		strcpy(arquivo,dir_Caminho);
-		strcat(arquivo,"/");
-		strcat(arquivo,recvBuff);
-		
+	}else{		
+	
 		pthread_mutex_lock(&mutex);
-			int Em_uso = Buscar_hash(arquivo); // Retorna -1=Não Achou; 0=Mostrar; 1=Escrever; 2=Remover;
+			if (Inserir_hash(arquivo,'R') == -1)
+				printf("\033[41mErro ao inserir na Hash.\033[40m\n");
 			//Mostra_hash();
 		pthread_mutex_unlock(&mutex);
 		
-		if (Em_uso >= 0)
-		{
-			snprintf(sendBuff, sizeof(sendBuff), "\033[41mArquivo sendo manipulado por outro Cliente.\033[40m\n");
-			send(connfd,sendBuff,strlen(sendBuff), 0);
-		}else
-			{		
-			char comando[BYTE]  = "rm ";
-			strcat(comando,recvBuff);
-			
-			pthread_mutex_lock(&mutex);
-				if (Inserir_hash(arquivo,'R') == -1)
-					printf("\033[41mErro ao inserir na Hash.\033[40m\n");
-				//Mostra_hash();
-			pthread_mutex_unlock(&mutex);
-			
-			if (system(comando) == 0)
-			{
-				snprintf(sendBuff, sizeof(sendBuff), "\033[42mArquivo removido com sucesso.\033[40m\n");
-				send(connfd,sendBuff,strlen(sendBuff), 0);
-			}else
-				{			
-				snprintf(sendBuff, sizeof(sendBuff), "\033[41mErro ao remover arquivo.\033[40m\n");
-				send(connfd,sendBuff,strlen(sendBuff), 0);
-				}
-			
-			pthread_mutex_lock(&mutex);
-				if (Remover_hash(arquivo) == -1)
-					printf("\033[41mErro ao remover na Hash.\033[40m\n");
-				//Mostra_hash();
-			pthread_mutex_unlock(&mutex);
-		}
-	}else
-		{			
-		stpcpy(dir_Caminho,dir_Raiz);
-		snprintf(sendBuff, sizeof(sendBuff), "\033[41mErro ao acessar diretório atual. Redirecionado a Raiz.\033[40m\n");
+		memset(comando, 0, sizeof(comando));
+		snprintf(comando, sizeof(comando), "rfile\n%i\n",dir_ID);
+		
+		strcat(comando,recvBuff);
+		strcat(comando,"\n");
+		
+		ChamadaPipe(comando);
+		
+		snprintf(sendBuff, sizeof(sendBuff), comando);
 		send(connfd,sendBuff,strlen(sendBuff), 0);
-		}
+		
+		printf("> %s",comando);
+		
+		pthread_mutex_lock(&mutex);
+			if (Remover_hash(arquivo) == -1)
+				printf("\033[41mErro ao remover na Hash.\033[40m\n");
+			//Mostra_hash();
+		pthread_mutex_unlock(&mutex);
+	}
+		
 }  
 
 
 
-void Escrever_FILE(int connfd, char *dir_Caminho)
+void Escrever_FILE(int connfd, char *dir_Caminho, int dir_ID)
 {
+
 	char sendBuff[BYTE];
 	char recvBuff[BYTE];
 	char arquivo[BYTE];
+	char comando[BYTE];
 	int tamBuff=0;
+
+
+	snprintf(sendBuff, sizeof(sendBuff), "\033[44mEscrever em arquivo, digite o nome:\033[40m\n");
+	send(connfd,sendBuff,strlen(sendBuff), 0);
 	
+	tamBuff = recv(connfd,recvBuff,BYTE, 0);
+	recvBuff[tamBuff] = 0x00;
+	retENT(recvBuff);
 	
-	if (chdir(dir_Caminho) == 0)	// chdir - altera o diretório de trabalho
+	memset(arquivo, 0, sizeof(arquivo)); // preenche área de memoria com 0
+	strcpy(arquivo,dir_Caminho);
+	strcat(arquivo,"/");
+	strcat(arquivo,recvBuff);
+	
+	pthread_mutex_lock(&mutex);
+		int Em_uso = Buscar_hash(arquivo); // Retorna -1=Não Achou; 0=Mostrar; 1=Escrever; 2=Remover;
+		//Mostra_hash();
+	pthread_mutex_unlock(&mutex);
+		
+	if (Em_uso >= 0)
 	{
-		snprintf(sendBuff, sizeof(sendBuff), "\033[44mEscrever em arquivo, digite o nome:\033[40m\n");
+		snprintf(sendBuff, sizeof(sendBuff), "\033[41mArquivo sendo manipulado por outro Cliente.\033[40m\n");
 		send(connfd,sendBuff,strlen(sendBuff), 0);
-		
-		tamBuff = recv(connfd,recvBuff,BYTE, 0);
-		recvBuff[tamBuff] = 0x00;
-		retENT(recvBuff);
-		
-		memset(arquivo, 0, sizeof(arquivo)); // preenche área de memoria com 0
-		strcpy(arquivo,dir_Caminho);
-		strcat(arquivo,"/");
-		strcat(arquivo,recvBuff);
-		
+	}else
+		{
+	
 		pthread_mutex_lock(&mutex);
-			int Em_uso = Buscar_hash(arquivo); // Retorna -1=Não Achou; 0=Mostrar; 1=Escrever; 2=Remover;
+			if (Inserir_hash(arquivo,'E') == -1)
+				printf("\033[41mErro ao inserir na Hash.\033[40m\n");
 			//Mostra_hash();
 		pthread_mutex_unlock(&mutex);
 		
-		if (Em_uso >= 0)
-		{
-			snprintf(sendBuff, sizeof(sendBuff), "\033[41mArquivo sendo manipulado por outro Cliente.\033[40m\n");
-			send(connfd,sendBuff,strlen(sendBuff), 0);
-		}else
-			{
-	 
-			FILE *nome_arquivo; 
-			
-			pthread_mutex_lock(&mutex);
-				if (Inserir_hash(arquivo,'E') == -1)
-					printf("\033[41mErro ao inserir na Hash.\033[40m\n");
-				//Mostra_hash();
-			pthread_mutex_unlock(&mutex);
-			
-			if(nome_arquivo = fopen(recvBuff,"a+")) // abertura como escrita no final e não cria novo arquivo se não existir
-			{ 
-				snprintf(sendBuff, sizeof(sendBuff), "\033[44mDigite o texto:\033[40m\n");
-				send(connfd,sendBuff,strlen(sendBuff), 0);	
-				
-				tamBuff = recv(connfd,recvBuff,BYTE, 0);
-				recvBuff[tamBuff] = 0x00;
-				retENT(recvBuff);
-				
-				strcat(recvBuff,"\n");
-				
-				if(fprintf(nome_arquivo,recvBuff) < 0)
-				{
-					snprintf(sendBuff, sizeof(sendBuff), "\033[41mNão foi possivel escrever no arquivo.\033[40m\n");
-					send(connfd,sendBuff,strlen(sendBuff), 0);
-				}else
-					{
-						snprintf(sendBuff, sizeof(sendBuff), "\033[42mArquivo salvo.\033[40m \n");
-						send(connfd,sendBuff,strlen(sendBuff), 0);			
-					}
-				
-			}else
-				{			
-				snprintf(sendBuff, sizeof(sendBuff), "\033[41mNão foi possivel abrir o arquivo.\033[40m\n");
-				send(connfd,sendBuff,strlen(sendBuff), 0);
-				}
-			fclose(nome_arquivo);
-			
-			pthread_mutex_lock(&mutex);
-				if (Remover_hash(arquivo) == -1)
-					printf("\033[41mErro ao remover na Hash.\033[40m\n");
-				//Mostra_hash();
-			pthread_mutex_unlock(&mutex);
-		}
-	}else
-		{			
-		stpcpy(dir_Caminho,dir_Raiz);
-		snprintf(sendBuff, sizeof(sendBuff), "\033[41mErro ao acessar diretório atual. Redirecionado a Raiz.\033[40m\n");
+		memset(comando, 0, sizeof(comando));
+		snprintf(comando, sizeof(comando), "efile\n%i\n",dir_ID);
+		
+		strcat(comando,recvBuff);
+		strcat(comando,"\n");
+		
+		memset(recvBuff,0, sizeof(recvBuff));
+	
+		snprintf(sendBuff, sizeof(sendBuff), "\033[44mDigite o conteúdo:\033[40m\n");
 		send(connfd,sendBuff,strlen(sendBuff), 0);
-		}
+	
+		tamBuff = recv(connfd,recvBuff,BYTE, 0);
+		recvBuff[tamBuff] = 0x00;
+		retENT(recvBuff);
+	
+		strcat(comando,recvBuff);
+		strcat(comando,"\n");
+	
+		ChamadaPipe(comando);
+		
+		snprintf(sendBuff, sizeof(sendBuff), comando);
+		send(connfd,sendBuff,strlen(sendBuff), 0);
+		
+		printf("> %s",comando);
+		
+		pthread_mutex_lock(&mutex);
+			if (Remover_hash(arquivo) == -1)
+				printf("\033[41mErro ao remover na Hash.\033[40m\n");
+			//Mostra_hash();
+		pthread_mutex_unlock(&mutex);
+	}
+
 }
 
 
 
-void Mostrar_FILE(int connfd, char *dir_Caminho)
+void Mostrar_FILE(int connfd, char *dir_Caminho, int dir_ID)
 {
+	
 	char sendBuff[BYTE];
 	char recvBuff[BYTE];
 	char arquivo[BYTE];
-	char conteudo[BYTE];
+	char comando[BYTE];
 	int tamBuff=0;
 
+
+	snprintf(sendBuff, sizeof(sendBuff), "\033[44mMostrar arquivo, digite o nome:\033[40m\n");
+	send(connfd,sendBuff,strlen(sendBuff), 0);
 	
-	if (chdir(dir_Caminho) == 0)	// chdir - altera o diretório de trabalho
+	tamBuff = recv(connfd,recvBuff,BYTE, 0);
+	recvBuff[tamBuff] = 0x00;
+	retENT(recvBuff);
+	
+	memset(arquivo, 0, sizeof(arquivo)); // preenche área de memoria com 0
+	strcpy(arquivo,dir_Caminho);
+	strcat(arquivo,"/");
+	strcat(arquivo,recvBuff);
+	
+	pthread_mutex_lock(&mutex);
+		int Em_uso = Buscar_hash(arquivo); // Retorna -1=Não Achou; 0=Mostrar; 1=Escrever; 2=Remover;
+		//Mostra_hash();
+	pthread_mutex_unlock(&mutex);
+		
+	if (Em_uso >= 1)
 	{
-		snprintf(sendBuff, sizeof(sendBuff), "\033[44mMostrar arquivo, digite o nome:\033[40m\n");
+		snprintf(sendBuff, sizeof(sendBuff), "\033[41mArquivo sendo manipulado por outro Cliente.\033[40m\n");
 		send(connfd,sendBuff,strlen(sendBuff), 0);
-		
-		tamBuff = recv(connfd,recvBuff,BYTE, 0);
-		recvBuff[tamBuff] = 0x00;
-		retENT(recvBuff);
-		
-		memset(arquivo, 0, sizeof(arquivo)); // preenche área de memoria com 0
-		strcpy(arquivo,dir_Caminho);
-		strcat(arquivo,"/");
-		strcat(arquivo,recvBuff);
-		
+	}else
+		{
+	
 		pthread_mutex_lock(&mutex);
-			int Em_uso = Buscar_hash(arquivo); // Retorna -1=Não Achou; 0=Mostrar; 1=Escrever; 2=Remover;
+			if (Inserir_hash(arquivo,'M') == -1)
+				printf("\033[41mErro ao inserir na Hash.\033[40m\n");
 			//Mostra_hash();
 		pthread_mutex_unlock(&mutex);
 		
-		if (Em_uso >= 1)
-		{
-			snprintf(sendBuff, sizeof(sendBuff), "\033[41mArquivo sendo manipulado por outro Cliente.\033[40m\n");
-			send(connfd,sendBuff,strlen(sendBuff), 0);
-		}else
-			{
-	 
-			FILE *nome_arquivo; 
-			
-			pthread_mutex_lock(&mutex);
-				if (Inserir_hash(arquivo,'M') == -1)
-					printf("\033[41mErro ao inserir na Hash.\033[40m\n");
-				//Mostra_hash();
-			pthread_mutex_unlock(&mutex);
-			
-			if(nome_arquivo = fopen(recvBuff,"r"))
-			{ 
-				memset(sendBuff, 0, sizeof(sendBuff)); // preenche área de memoria com 0
-				memset(conteudo, 0, sizeof(sendBuff)); // preenche área de memoria com 0
-				
-				fread(conteudo, sizeof(char),BYTE-3,nome_arquivo);
-				strcat(sendBuff,"\n\n");
-				strcat(sendBuff,conteudo);
-				strcat(sendBuff,"\n");
-				send(connfd,sendBuff,strlen(sendBuff), 0);
-			}else
-				{			
-				snprintf(sendBuff, sizeof(sendBuff), "\033[41mNão foi possivel abrir o arquivo.\033[40m\n");
-				send(connfd,sendBuff,strlen(sendBuff), 0);
-				}
-			fclose(nome_arquivo);
-			
-			pthread_mutex_lock(&mutex);
-				if (Remover_hash(arquivo) == -1)
-					printf("\033[41mErro ao remover na Hash.\033[40m\n");
-				//Mostra_hash();
-			pthread_mutex_unlock(&mutex);
-		}
-	}else
-		{			
-		stpcpy(dir_Caminho,dir_Raiz);
-		snprintf(sendBuff, sizeof(sendBuff), "\033[41mErro ao acessar diretório atual. Redirecionado a Raiz.\033[40m\n");
+		memset(comando, 0, sizeof(comando));
+		snprintf(comando, sizeof(comando), "mfile\n%i\n",dir_ID);
+		
+		strcat(comando,recvBuff);
+		strcat(comando,"\n");
+		
+		ChamadaPipe(comando);
+		
+		snprintf(sendBuff, sizeof(sendBuff), comando);
 		send(connfd,sendBuff,strlen(sendBuff), 0);
-		}
+		
+		printf("> %s",comando);
+		
+		pthread_mutex_lock(&mutex);
+			if (Remover_hash(arquivo) == -1)
+				printf("\033[41mErro ao remover na Hash.\033[40m\n");
+			//Mostra_hash();
+		pthread_mutex_unlock(&mutex);
+	}
+
 }
 
 
